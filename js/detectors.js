@@ -32,6 +32,34 @@
     return ch !== undefined && ch >= '0' && ch <= '9';
   }
 
+  /** Inputs at or below this size are scanned synchronously (one tick); larger ones are time-sliced. */
+  const SYNC_SCAN_LIMIT = 160000;
+
+  /**
+   * True when a digit run is not glued to letters/digits and not part of a longer
+   * dotted, hyphenated or separator-joined number (dates, versions, longer IDs).
+   * @param {string} text
+   * @param {number} start
+   * @param {number} end
+   * @param {string} sep separator used inside the run ('' when ungrouped)
+   */
+  function isIsolatedDigitRun(text, start, end, sep) {
+    const prev = start > 0 ? text[start - 1] : undefined;
+    const next = end < text.length ? text[end] : undefined;
+    if (isAlphaNum(prev) || isAlphaNum(next)) {
+      return false;
+    }
+    const digitBefore = start >= 2 && isDigit(text[start - 2]);
+    const digitAfter = end + 1 < text.length && isDigit(text[end + 1]);
+    if (digitBefore && (prev === '.' || prev === '-' || (sep && prev === sep))) {
+      return false;
+    }
+    if (digitAfter && (next === '.' || next === '-' || (sep && next === sep))) {
+      return false;
+    }
+    return true;
+  }
+
   function createEmptyRejected() {
     return {
       CREDIT_CARD: 0,
@@ -104,28 +132,7 @@
       const sep = m[3] || '';
       const start = m.index;
       const end = start + raw.length;
-      const prev = start > 0 ? text[start - 1] : undefined;
-      const next = end < text.length ? text[end] : undefined;
-
-      if (isAlphaNum(prev) || isAlphaNum(next)) {
-        continue;
-      }
-      if (prev === '.' && start >= 2 && isDigit(text[start - 2])) {
-        continue;
-      }
-      if (next === '.' && end + 1 < text.length && isDigit(text[end + 1])) {
-        continue;
-      }
-      if (prev === '-' && start >= 2 && isDigit(text[start - 2])) {
-        continue;
-      }
-      if (next === '-' && end + 1 < text.length && isDigit(text[end + 1])) {
-        continue;
-      }
-      if (sep && prev === sep && start >= 2 && isDigit(text[start - 2])) {
-        continue;
-      }
-      if (sep && next === sep && end + 1 < text.length && isDigit(text[end + 1])) {
+      if (!isIsolatedDigitRun(text, start, end, sep)) {
         continue;
       }
 
@@ -163,28 +170,7 @@
       const sep = m[1] || '';
       const start = m.index;
       const end = start + raw.length;
-      const prev = start > 0 ? text[start - 1] : undefined;
-      const next = end < text.length ? text[end] : undefined;
-
-      if (isAlphaNum(prev) || isAlphaNum(next)) {
-        continue;
-      }
-      if (prev === '.' && start >= 2 && isDigit(text[start - 2])) {
-        continue;
-      }
-      if (next === '.' && end + 1 < text.length && isDigit(text[end + 1])) {
-        continue;
-      }
-      if (prev === '-' && start >= 2 && isDigit(text[start - 2])) {
-        continue;
-      }
-      if (next === '-' && end + 1 < text.length && isDigit(text[end + 1])) {
-        continue;
-      }
-      if (sep && prev === sep && start >= 2 && isDigit(text[start - 2])) {
-        continue;
-      }
-      if (sep && next === sep && end + 1 < text.length && isDigit(text[end + 1])) {
+      if (!isIsolatedDigitRun(text, start, end, sep)) {
         continue;
       }
 
@@ -619,7 +605,7 @@
   function scanAsync(text, enabledTypes, options) {
     const opts = options || {};
     const source = typeof text === 'string' ? text : '';
-    const chunkSize = opts.chunkSize || 160000;
+    const chunkSize = opts.chunkSize || SYNC_SCAN_LIMIT;
 
     if (source.length <= chunkSize) {
       if (opts.onProgress) {
@@ -666,6 +652,10 @@
     scan: scan,
     scanAsync: scanAsync,
     resolveOverlaps: resolveOverlaps,
-    normalizeValue: normalizeValue
+    normalizeValue: normalizeValue,
+    isIsolatedDigitRun: isIsolatedDigitRun,
+    emptyCounts: createEmptyCounts,
+    emptyRejected: createEmptyRejected,
+    SYNC_SCAN_LIMIT: SYNC_SCAN_LIMIT
   };
 })(typeof window !== 'undefined' ? window : globalThis);
