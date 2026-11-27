@@ -36,11 +36,62 @@
     return arr[Math.floor(Math.random() * arr.length)];
   }
 
-  /* Visible-only interval: skips ticks while the tab is hidden. */
-  function every(ms, fn) {
+  /** Shared motion state. The nav toggle pauses every animated element (WCAG 2.2.2). */
+  const motion = (Scrub.motion = Scrub.motion || { paused: reduceMotion });
+
+  /**
+   * Interval that skips ticks while the tab is hidden, motion is paused, or the
+   * optional gate (for example "is this section on screen") returns false.
+   * @param {number} ms
+   * @param {Function} fn
+   * @param {Function} [isActive]
+   */
+  function every(ms, fn, isActive) {
     return global.setInterval(function () {
-      if (!doc.hidden) fn();
+      if (doc.hidden || motion.paused || (isActive && !isActive())) return;
+      fn();
     }, ms);
+  }
+
+  /**
+   * Track whether a node is on screen.
+   * @param {Element} node
+   * @returns {Function} getter returning the latest visibility
+   */
+  function onScreen(node) {
+    let vis = true;
+    if (node && 'IntersectionObserver' in global) {
+      new IntersectionObserver(function (entries) {
+        vis = entries[0].isIntersecting;
+      }).observe(node);
+    }
+    return function () {
+      return vis;
+    };
+  }
+
+  /**
+   * Run fn once, the first time node comes within `margin` of the viewport.
+   * Used to keep benchmark work off the critical path at page load.
+   */
+  function whenNear(node, fn, margin) {
+    if (!node || !('IntersectionObserver' in global)) {
+      fn();
+      return;
+    }
+    let done = false;
+    function runOnce() {
+      if (done) return;
+      done = true;
+      io.disconnect();
+      fn();
+    }
+    const io = new IntersectionObserver(function (entries) {
+      if (entries[0].isIntersecting) runOnce();
+    }, { rootMargin: margin || '400px 0px' });
+    io.observe(node);
+    // Fallback: never leave the section empty if the observer doesn't fire.
+    global.setTimeout(runOnce, 2500);
   }
 
   /* ---------- Roving tablist helper (arrow keys, Home/End) ---------- */
@@ -126,7 +177,7 @@
     return li;
   }
 
-  function initTraffic() {
+  function initTraffic(live) {
     const feed = $('logFeed');
     if (!feed) return;
     const MAX = 13;
@@ -138,7 +189,7 @@
     every(1600, function () {
       feed.appendChild(makeLogLine(new Date()));
       while (feed.children.length > MAX) feed.removeChild(feed.firstChild);
-    });
+    }, live);
   }
 
   /* ---------- Console: packet inspector (runs the real engine) ---------- */
@@ -152,18 +203,6 @@
     '  "client_ip": "203.0.113.42"\n' +
     '}';
 
-  function renderMarked(pre, text, spans, cls) {
-    const frag = doc.createDocumentFragment();
-    let cursor = 0;
-    spans.forEach(function (s) {
-      if (s.start > cursor) frag.appendChild(doc.createTextNode(text.slice(cursor, s.start)));
-      frag.appendChild(el('mark', cls, text.slice(s.start, s.end)));
-      cursor = s.end;
-    });
-    if (cursor < text.length) frag.appendChild(doc.createTextNode(text.slice(cursor)));
-    pre.replaceChildren(frag);
-  }
-
   function initPacket() {
     const rawPre = $('packetRaw');
     const cleanPre = $('packetClean');
@@ -173,15 +212,8 @@
     const red = Scrub.redactors.redact(PACKET, scan.findings, 'partial');
     const ms = performance.now() - t0;
 
-    renderMarked(rawPre, PACKET, scan.findings, '');
-    renderMarked(
-      cleanPre,
-      red.output,
-      red.replacements.map(function (r) {
-        return { start: r.outStart, end: r.outEnd };
-      }),
-      'clean'
-    );
+    renderSpans(rawPre, PACKET, scan.findings, function () { return ''; });
+    renderSpans(cleanPre, red.output, outSpans(red), function () { return 'clean'; });
     const rej = scan.rejected;
     const rejected = rej.CREDIT_CARD + rej.AADHAAR + rej.PAN + rej.IP;
     $('packetCount').textContent = scan.total + ' MASKED · ' + rejected + ' LOOK-ALIKE LEFT INTACT';
@@ -189,7 +221,7 @@
   }
 
   /* ---------- Console: neural shield radar ---------- */
-  function initShield() {
+  function initShield(live) {
     const g = $('radarNodes');
     const legend = $('shieldLegend');
     if (!g || !legend) return;
@@ -248,6 +280,8 @@
       const i = Math.floor(Math.random() * nodes.length);
       nodes[i].threat = !nodes[i].threat && nodes.filter(function (n) { return n.threat; }).length < 4;
       draw();
+    }, function () {
+      return live() && !$('cpShield').hidden;
     });
   }
 
@@ -260,15 +294,16 @@
         p.classList.toggle('is-active', i === j);
       });
     });
-    initTraffic();
+    const live = onScreen(doc.querySelector('.console'));
+    initTraffic(live);
     initPacket();
-    initShield();
+    initShield(live);
     const clock = $('consoleClock');
     if (clock) {
       clock.textContent = clockString(new Date());
       every(1000, function () {
         clock.textContent = clockString(new Date());
-      });
+      }, live);
     }
   }
 
@@ -276,12 +311,14 @@
   function initTickers() {
     if (reduceMotion) return;
     const nodes = Array.prototype.slice.call(doc.querySelectorAll('[data-tick]'));
+    if (!nodes.length) return;
+    const live = onScreen(doc.querySelector('.bento'));
     every(2600, function () {
       const n = pick(nodes);
       const v = Number(n.getAttribute('data-tick')) + 1 + Math.floor(Math.random() * 3);
       n.setAttribute('data-tick', String(v));
       n.textContent = fmtInt(v);
-    });
+    }, live);
   }
 
   /* ---------- Defense matrix (latencies measured live) ---------- */
@@ -310,9 +347,7 @@
       scan = D.scan(text);
     }, 20);
 
-    const raws = scan.findings.map(function (f) {
-      return f;
-    });
+    const raws = scan.findings;
     const isolateMs = measure(function () {
       for (let i = 0; i < raws.length; i++) {
         const f = raws[i];
@@ -372,17 +407,38 @@
     ];
   }
 
-  /* Render text with entity spans as <mark class="hl hl-TYPE"> (pure DOM). */
-  function renderHL(container, text, spans, extraClass) {
+  /**
+   * Render text with sorted, non-overlapping spans wrapped in <mark> (pure DOM, XSS-safe).
+   * @param {Element} container
+   * @param {string} text
+   * @param {Array<{start:number,end:number,type?:string}>} spans
+   * @param {Function} classFor span => className
+   */
+  function renderSpans(container, text, spans, classFor) {
     const frag = doc.createDocumentFragment();
     let cursor = 0;
-    spans.forEach(function (s) {
-      if (s.start > cursor) frag.appendChild(doc.createTextNode(text.slice(cursor, s.start)));
-      frag.appendChild(el('mark', 'hl hl-' + s.type + (extraClass ? ' ' + extraClass : ''), text.slice(s.start, s.end)));
-      cursor = s.end;
-    });
+    for (let i = 0; i < spans.length; i++) {
+      const sp = spans[i];
+      if (sp.start > cursor) frag.appendChild(doc.createTextNode(text.slice(cursor, sp.start)));
+      frag.appendChild(el('mark', classFor(sp), text.slice(sp.start, sp.end)));
+      cursor = sp.end;
+    }
     if (cursor < text.length) frag.appendChild(doc.createTextNode(text.slice(cursor)));
     container.replaceChildren(frag);
+  }
+
+  /** Entity-coloured highlights (`hl hl-TYPE`) using the shared diff palette. */
+  function renderHL(container, text, spans, extraClass) {
+    renderSpans(container, text, spans, function (sp) {
+      return 'hl hl-' + sp.type + (extraClass ? ' ' + extraClass : '');
+    });
+  }
+
+  /** Output-side spans for a redaction result. */
+  function outSpans(red) {
+    return red.replacements.map(function (r) {
+      return { start: r.outStart, end: r.outEnd, type: r.type };
+    });
   }
 
   function rvRow(i, children, cls) {
@@ -555,9 +611,7 @@
       renderHL(
         cleanPre,
         red.output,
-        red.replacements.map(function (r) {
-          return { start: r.outStart, end: r.outEnd, type: r.type };
-        }),
+        outSpans(red),
         'hl-sanitized'
       );
     }
@@ -579,6 +633,7 @@
       });
       $('compareRawCount').textContent = String(exposed);
       $('compareCleanCount').textContent = String(marks.length - exposed);
+      range.setAttribute('aria-valuetext', exposed + ' values exposed, ' + (marks.length - exposed) + ' scrubbed');
     }
 
     chips.forEach(function (chip) {
@@ -632,9 +687,7 @@
       renderHL(
         card.querySelector('.use-clean'),
         red.output,
-        red.replacements.map(function (r) {
-          return { start: r.outStart, end: r.outEnd, type: r.type };
-        }),
+        outSpans(red),
         'hl-sanitized'
       );
     });
@@ -753,15 +806,33 @@
     every(1000, tick);
   }
 
+  /* ---------- Pause / resume all motion (WCAG 2.2.2) ---------- */
+  function initMotionToggle() {
+    const btn = $('motionToggle');
+    if (!btn) return;
+    function apply() {
+      doc.documentElement.classList.toggle('motion-paused', motion.paused);
+      btn.setAttribute('aria-pressed', motion.paused ? 'true' : 'false');
+      btn.querySelector('.motion-label').textContent = motion.paused ? 'Resume motion' : 'Pause motion';
+      doc.dispatchEvent(new Event('scrub:motion'));
+    }
+    btn.addEventListener('click', function () {
+      motion.paused = !motion.paused;
+      apply();
+    });
+    apply();
+  }
+
   // Hide reveal targets only when JS is running, so the page never ships blank.
   if (!reduceMotion) doc.documentElement.classList.add('js-reveal');
 
   function init() {
     initNav();
+    initMotionToggle();
     initConsole();
     initTickers();
-    initMatrix();
-    initStats();
+    whenNear($('architecture'), initMatrix);
+    whenNear($('live'), initStats);
     initCompare();
     initUses();
     initCtas();
