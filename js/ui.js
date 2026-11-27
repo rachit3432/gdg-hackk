@@ -89,25 +89,17 @@
     };
   }
 
-  /**
-   * Build number gutter text ("1\n2\n...") safely in one text node.
-   */
-  function buildLineNumbersText(text) {
-    if (!text) {
-      return '1';
-    }
-    let count = 1;
-    for (let i = 0; i < text.length; i++) {
-      if (text.charCodeAt(i) === 10) {
-        count++;
-      }
-    }
-    const nums = new Array(count);
-    for (let i = 0; i < count; i++) {
+  /** Gutter text "1\n2\n...n" for a given line count. */
+  function buildLineNumbers(count) {
+    const nums = new Array(Math.max(1, count));
+    for (let i = 0; i < nums.length; i++) {
       nums[i] = String(i + 1);
     }
     return nums.join('\n');
   }
+
+  // Gutters are only rebuilt when the line count actually changes.
+  const gutterCache = { orig: -1, san: -1 };
 
   function countLines(text) {
     if (!text) {
@@ -176,7 +168,6 @@
   function renderDiff(dom, text, outputText, findings, replacements, ignoredKeys) {
     const origById = new Map();
     const sanById = new Map();
-    const origMarks = [];
 
     // 1. Original mirrored backdrop
     const origFrag = document.createDocumentFragment();
@@ -195,7 +186,6 @@
         mark.setAttribute('data-fid', f.id);
         origFrag.appendChild(mark);
         origById.set(f.id, mark);
-        origMarks.push(mark);
         cursor = f.end;
       }
       if (cursor < text.length) {
@@ -245,18 +235,22 @@
     dom.sanitizedOutput.replaceChildren(sanFrag);
 
     // 3. Line numbers (identical vertical line alignment because white-space: pre)
-    const origLinesStr = buildLineNumbersText(text);
-    const sanLinesStr = buildLineNumbersText(outputText);
-    dom.originalLines.textContent = origLinesStr;
-    dom.sanitizedLines.textContent = sanLinesStr;
-
     const lineCount = countLines(text);
+    const sanCount = countLines(outputText);
+    if (lineCount !== gutterCache.orig) {
+      gutterCache.orig = lineCount;
+      dom.originalLines.textContent = buildLineNumbers(lineCount);
+    }
+    if (sanCount !== gutterCache.san) {
+      gutterCache.san = sanCount;
+      dom.sanitizedLines.textContent = buildLineNumbers(sanCount);
+    }
+
     dom.originalMeta.textContent = lineCount + ' lines // ' + text.length + ' chars';
 
     return {
       origById: origById,
-      sanById: sanById,
-      origMarks: origMarks
+      sanById: sanById
     };
   }
 
@@ -418,6 +412,15 @@
       tr.addEventListener('click', function () {
         onSelectRow(rep);
       });
+      // Rows are keyboard-operable: Enter/Space locates the entity in both panes.
+      tr.tabIndex = 0;
+      tr.setAttribute('aria-label', rep.type + ' on line ' + rep.line + ', output ' + (rep.ignored ? 'unredacted' : rep.replacement));
+      tr.addEventListener('keydown', function (ev) {
+        if (ev.target === tr && (ev.key === 'Enter' || ev.key === ' ')) {
+          ev.preventDefault();
+          onSelectRow(rep);
+        }
+      });
 
       rowById.set(rep.id, tr);
       frag.appendChild(tr);
@@ -531,6 +534,7 @@
       const active = btn.getAttribute('data-mode') === mode;
       btn.classList.toggle('is-active', active);
       btn.setAttribute('aria-checked', active ? 'true' : 'false');
+      btn.tabIndex = active ? 0 : -1; // roving tabindex: one Tab stop for the radio group
     }
 
     const isFull = mode === 'full';
@@ -556,7 +560,9 @@
   }
 
   function announce(dom, msg) {
-    dom.liveAnnouncer.textContent = msg;
+    if (dom.liveAnnouncer.textContent !== msg) {
+      dom.liveAnnouncer.textContent = msg;
+    }
   }
 
   function runBootSequence(dom) {
