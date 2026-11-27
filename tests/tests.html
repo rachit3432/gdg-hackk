@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none';">
+  <meta name="color-scheme" content="dark">
+  <title>AEGIS // PROTOCOL — Engine Test Suite</title>
+  <link rel="stylesheet" href="../css/styles.css?v=2.1">
+  <style>
+    .test-shell { max-width: 1080px; margin: 0 auto; padding: 32px 24px 64px; display: flex; flex-direction: column; gap: 16px; }
+    .test-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+    .test-head h1 { font-size: 26px; letter-spacing: -0.01em; margin-top: 8px; }
+    .test-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px; border: 1px solid var(--line); background: var(--surface); }
+    .summary-chips { display: flex; flex-wrap: wrap; gap: 8px 24px; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; color: var(--meta); }
+    .summary-chips strong { color: var(--head); margin-left: 4px; }
+    .test-badge { padding: 6px 12px; font-family: var(--font-mono); font-weight: 700; letter-spacing: 0.14em; font-size: 12px; border: 1px solid rgba(143, 214, 148, 0.45); color: var(--ok); background: rgba(143, 214, 148, 0.06); }
+    .test-badge.is-fail { border-color: rgba(242, 73, 107, 0.5); color: var(--crimson); background: rgba(242, 73, 107, 0.06); }
+    .suite-list { display: flex; flex-direction: column; gap: 12px; }
+    .suite-card { padding: 16px 18px; border: 1px solid var(--line); background: var(--surface); }
+    .suite-title { margin: 0 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-family: var(--font-mono); font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--cyan); }
+    .case-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 6px 4px; border-bottom: 1px dashed var(--line); font-size: 13.5px; }
+    .case-row:last-of-type { border-bottom: 0; }
+    .case-status { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 0.12em; flex-shrink: 0; }
+    .case-pass { color: var(--ok); }
+    .case-fail { color: var(--crimson); }
+    .case-error { margin: 4px 0 8px 12px; padding: 8px 10px; background: rgba(242, 73, 107, 0.06); border-left: 2px solid var(--crimson); color: #ffc2cf; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div class="void-grid" aria-hidden="true"></div>
+  <div class="test-shell">
+    <header class="test-head">
+      <div>
+        <span class="section-index">Engine diagnostics // zero dependencies</span>
+        <h1>AEGIS // PROTOCOL test suite</h1>
+      </div>
+      <div class="nav-actions">
+        <span class="status-pill"><span class="status-dot" aria-hidden="true"></span>Local only · 0 network calls</span>
+        <a href="../index.html" class="btn btn-ghost btn-sm">Open app</a>
+      </div>
+    </header>
+
+    <section class="test-summary" id="testSummary" aria-live="polite">
+      <div class="summary-chips">
+        <span>TOTAL <strong id="totalCount">0</strong></span>
+        <span>PASSED <strong id="passCount">0</strong></span>
+        <span>FAILED <strong id="failCount">0</strong></span>
+        <span>DURATION <strong id="durationMs">0 ms</strong></span>
+      </div>
+      <div class="test-badge" id="overallBadge">RUNNING...</div>
+    </section>
+
+    <main class="suite-list" id="suiteList"></main>
+  </div>
+
+  <script defer src="../js/validators.js?v=2.1"></script>
+  <script defer src="../js/detectors.js?v=2.1"></script>
+  <script defer src="../js/redactors.js?v=2.1"></script>
+  <script defer src="../js/sample.js?v=2.1"></script>
+  <script defer src="tests.js?v=2.1"></script>
+</body>
+</html>

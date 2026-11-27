@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none';">
+  <meta name="description" content="AEGIS // PROTOCOL — client-side PII detection and redaction. Runs entirely in your browser.">
+  <meta name="color-scheme" content="dark">
+  <title>AEGIS // PROTOCOL — Local PII Sanitizer</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2307080A'/%3E%3Cpath d='M16 3 27 7.5v8.2c0 6.3-4.6 11-11 13.3C9.6 26.7 5 22 5 15.7V7.5Z' fill='none' stroke='%237FE3EE' stroke-width='1.6'/%3E%3Cpath d='M16 10.5 21 20h-10Z' fill='none' stroke='%23E9A23B' stroke-width='1.6'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/styles.css?v=2.1">
+</head>
+<body>
+  <a class="skip-link" href="#sanitizer">Skip to the sanitizer</a>
+  <div class="void-grid" aria-hidden="true"></div>
+
+  <!-- ============ NAV ============ -->
+  <header class="nav" id="top">
+    <div class="nav-inner wrap">
+      <a class="brand" href="#top" aria-label="AEGIS // PROTOCOL home">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M16 3 27 7.5v8.2c0 6.3-4.6 11-11 13.3C9.6 26.7 5 22 5 15.7V7.5Z" />
+          <path class="brand-mark-core" d="M16 10.5 21 20h-10Z" />
+        </svg>
+        <span class="brand-word">AEGIS <span class="brand-sep">//</span> PROTOCOL</span>
+      </a>
+
+      <nav class="nav-links" id="navLinks" aria-label="Primary">
+        <a href="#capabilities">Capabilities</a>
+        <a href="#sanitizer">Sanitizer</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#contact">Contact</a>
+      </nav>
+
+      <div class="nav-actions">
+        <span class="status-pill" role="status"><span class="status-dot" aria-hidden="true"></span>Systems online</span>
+        <a class="btn btn-primary chamfer nav-cta" href="#sanitizer">Deploy defense</a>
+        <button type="button" class="nav-toggle" id="navToggle" aria-expanded="false" aria-controls="navLinks" aria-label="Open menu">
+          <span></span><span></span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ============ HERO ============ -->
+    <section class="hero wrap" aria-labelledby="heroTitle">
+      <div class="hero-copy">
+        <span class="eyebrow eyebrow-amber">Zero-trust autonomous defense</span>
+        <h1 class="hero-title" id="heroTitle">Defense that acts <em>faster than the&nbsp;breach.</em></h1>
+        <p class="hero-sub">
+          AEGIS isolates compromised nodes in milliseconds and scrubs sensitive data
+          before it leaves. The sanitizer below is the real engine. Paste your own text:
+          it runs in this tab and sends nothing anywhere.
+        </p>
+        <div class="hero-ctas">
+          <a class="btn btn-primary chamfer" href="#sanitizer" id="heroTry">Try the sanitizer</a>
+          <a class="btn btn-ghost chamfer" href="#architecture">View architecture</a>
+        </div>
+        <dl class="hero-facts">
+          <div><dt>Outbound requests</dt><dd class="mono" id="factRequests">0</dd></div>
+          <div><dt>Entity classes</dt><dd class="mono">6</dd></div>
+          <div><dt>Checksums</dt><dd class="mono">Luhn · Verhoeff</dd></div>
+        </dl>
+      </div>
+
+      <!-- 3D scrub core -->
+      <div class="core-stage" id="coreStage">
+        <canvas id="scrubCore" class="core-canvas" role="img"
+          aria-label="Animated scrub core: real PII values orbit a shield and are redacted by the engine as they cross the scan gate."></canvas>
+        <span class="core-cross core-cross-tl" aria-hidden="true"></span>
+        <span class="core-cross core-cross-tr" aria-hidden="true"></span>
+        <span class="core-cross core-cross-bl" aria-hidden="true"></span>
+        <span class="core-cross core-cross-br" aria-hidden="true"></span>
+        <span class="core-hud core-hud-tl mono" aria-hidden="true">SCRUB CORE // v2.0</span>
+        <span class="core-hud core-hud-tr mono" aria-hidden="true">GATE x=0 · ENGINE LIVE</span>
+        <span class="core-hud core-hud-bl mono" aria-hidden="true">REDACTED <b id="coreCount">0</b></span>
+        <span class="core-hud core-hud-br mono" aria-hidden="true">RATE <b id="coreRate">0.0/s</b></span>
+        <div class="core-legend mono" aria-hidden="true"><span class="lg-raw">raw value</span><span class="lg-clean">engine output</span></div>
+      </div>
+    </section>
+
+    <!-- ============ CLEARANCE STRIP ============ -->
+    <section class="clearance" aria-label="Control frameworks">
+      <div class="wrap clearance-inner">
+        <span class="clearance-label">Controls mapped to</span>
+        <ul class="clearance-list">
+          <li>ISO/IEC 27001</li>
+          <li>SOC 2 Type II</li>
+          <li>NIST CSF 2.0</li>
+          <li>DPDP Act 2023</li>
+          <li>Zero-knowledge verified</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ LIVE OPS ============ -->
+    <section class="section wrap reveal" id="live" aria-labelledby="liveTitle">
+      <div class="ops-grid">
+        <div class="ops-copy">
+          <span class="section-index">§01 // Live operations</span>
+          <h2 class="section-title" id="liveTitle">Measured in your browser, not on a slide.</h2>
+          <p class="section-sub">Every figure here is computed by the engine running in this tab against the bundled noisy sample, the moment the page loads.</p>
+          <dl class="stat-band">
+            <div><dt>Scan throughput</dt><dd><span class="mono" id="statThroughput">—</span><small>MB/s</small></dd></div>
+            <div><dt>Entities in sample</dt><dd><span class="mono" id="statEntities">—</span></dd></div>
+            <div><dt>Look-alikes rejected</dt><dd><span class="mono amber" id="statRejected">—</span></dd></div>
+            <div><dt>Bytes sent out</dt><dd><span class="mono ok">0</span></dd></div>
+          </dl>
+        </div>
+
+      <div class="console chamfer-lg" aria-label="Threat telemetry console">
+        <div class="console-meta">
+          <span>SYS.STATUS // <b class="ok">NOMINAL</b></span>
+          <span>NODE: 0x8F9A</span>
+          <span>BLOCKED <b class="threat mono" id="consoleBlocked">14,737</b></span>
+        </div>
+        <div class="console-tabs" role="tablist" aria-label="Console views">
+          <button type="button" class="console-tab is-active" role="tab" aria-selected="true" aria-controls="cpTraffic" id="ctTraffic" data-view="traffic">Live traffic</button>
+          <button type="button" class="console-tab" role="tab" aria-selected="false" aria-controls="cpPacket" id="ctPacket" data-view="packet" tabindex="-1">Packet inspector</button>
+          <button type="button" class="console-tab" role="tab" aria-selected="false" aria-controls="cpShield" id="ctShield" data-view="shield" tabindex="-1">Neural shield</button>
+        </div>
+
+        <div class="console-body">
+          <div class="console-panel is-active" id="cpTraffic" role="tabpanel" aria-labelledby="ctTraffic">
+            <ol class="log-feed mono" id="logFeed" aria-live="off"></ol>
+          </div>
+
+          <div class="console-panel" id="cpPacket" role="tabpanel" aria-labelledby="ctPacket" hidden>
+            <div class="packet-head mono">
+              <span>EGRESS POST /api/v2/tickets</span>
+              <span class="packet-count" id="packetCount">—</span>
+            </div>
+            <div class="packet-grid">
+              <div>
+                <span class="packet-label">Captured</span>
+                <pre class="packet-pre mono" id="packetRaw"></pre>
+              </div>
+              <div>
+                <span class="packet-label packet-label-ok">Released</span>
+                <pre class="packet-pre mono" id="packetClean"></pre>
+              </div>
+            </div>
+            <p class="packet-note">Redacted by the same engine as the sanitizer below, measured in <span class="mono" id="packetMs">—</span>.</p>
+          </div>
+
+          <div class="console-panel" id="cpShield" role="tabpanel" aria-labelledby="ctShield" hidden>
+            <div class="shield-wrap">
+              <svg class="radar" viewBox="0 0 240 240" aria-hidden="true">
+                <defs>
+                  <linearGradient id="sweepGrad" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0" stop-color="#7FE3EE" stop-opacity="0" />
+                    <stop offset="1" stop-color="#7FE3EE" stop-opacity="0.32" />
+                  </linearGradient>
+                </defs>
+                <circle cx="120" cy="120" r="108" class="radar-ring" />
+                <circle cx="120" cy="120" r="76" class="radar-ring" />
+                <circle cx="120" cy="120" r="44" class="radar-ring" />
+                <line x1="12" y1="120" x2="228" y2="120" class="radar-axis" />
+                <line x1="120" y1="12" x2="120" y2="228" class="radar-axis" />
+                <g class="radar-sweep"><path d="M120 120 L228 120 A108 108 0 0 0 196 44 Z" fill="url(#sweepGrad)" /></g>
+                <g id="radarNodes"></g>
+                <circle cx="120" cy="120" r="3" class="radar-core" />
+              </svg>
+              <ul class="shield-legend mono" id="shieldLegend"></ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="console-foot mono">
+          <span>ENC: AES-256-GCM</span>
+          <span id="consoleClock">--:--:--</span>
+        </div>
+      </div>
+      </div>
+    </section>
+
+    <!-- ============ BEFORE / AFTER ============ -->
+    <section class="section wrap reveal" id="proof" aria-labelledby="proofTitle">
+      <header class="section-head section-head-split">
+        <div>
+          <span class="section-index">§02 // Before &amp; after</span>
+          <h2 class="section-title" id="proofTitle">Drag the gate. Watch the leak close.</h2>
+          <p class="section-sub">A ticket from the sample, redacted by the engine when this page loaded. Left of the gate is what you would have sent. Right of it is what leaves with AEGIS.</p>
+        </div>
+        <div class="mode-chips" role="radiogroup" aria-label="Redaction mode for this preview">
+          <button type="button" class="mode-chip" role="radio" aria-checked="false" data-mode="full">Full</button>
+          <button type="button" class="mode-chip" role="radio" aria-checked="false" data-mode="partial">Partial</button>
+          <button type="button" class="mode-chip is-active" role="radio" aria-checked="true" data-mode="pseudonym">Pseudonym</button>
+        </div>
+      </header>
+
+      <div class="compare-scene">
+        <div class="compare chamfer-lg" id="compare">
+          <div class="compare-bar mono">
+            <span>TICKET #884920 // BILLING ESCALATION</span>
+            <span><span class="lg-raw">Exposed <b id="compareRawCount">0</b></span> &nbsp; <span class="lg-clean">Scrubbed <b id="compareCleanCount">0</b></span></span>
+          </div>
+          <div class="compare-body" id="compareBody">
+            <pre class="compare-doc compare-raw mono" id="compareRaw"></pre>
+            <pre class="compare-doc compare-clean mono" id="compareClean" aria-hidden="true"></pre>
+            <div class="compare-gate" id="compareGate" aria-hidden="true">
+              <span class="compare-label compare-label-l mono">RAW</span>
+              <span class="compare-knob"></span>
+              <span class="compare-label compare-label-r mono">SAFE</span>
+            </div>
+            <input type="range" class="compare-range" id="compareRange" min="0" max="100" value="38" aria-label="Move the gate to reveal the sanitized version">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CAPABILITIES ============ -->
+    <section class="section wrap reveal" id="capabilities" aria-labelledby="capTitle">
+      <header class="section-head">
+        <span class="section-index">§03 // Capabilities</span>
+        <h2 class="section-title" id="capTitle">Four layers. One autonomous posture.</h2>
+        <p class="section-sub">Each layer reports into the same engine, so a detection in one becomes enforcement in all.</p>
+      </header>
+
+      <div class="bento">
+        <article class="cap cap-a">
+          <span class="corner corner-tr" aria-hidden="true"></span><span class="corner corner-bl" aria-hidden="true"></span>
+          <span class="cap-tag">CAP.01 // HUNT</span>
+          <h3>Autonomous threat hunting</h3>
+          <p>Behavioral models trace lateral movement and command-and-control beacons without waiting for a signature.</p>
+          <dl class="cap-metrics">
+            <div><dt>Threats hunted</dt><dd class="mono" data-tick="51788">51,788</dd></div>
+            <div><dt>Mean time to detect</dt><dd class="mono">0.8 ms</dd></div>
+          </dl>
+        </article>
+
+        <article class="cap cap-b">
+          <span class="corner corner-tr" aria-hidden="true"></span><span class="corner corner-bl" aria-hidden="true"></span>
+          <span class="cap-tag">CAP.02 // CRYPTO</span>
+          <h3>Post-quantum cryptography</h3>
+          <p>ML-KEM key exchange on every tunnel, rotated on a schedule you set.</p>
+          <dl class="cap-metrics">
+            <div><dt class="amber">Key rotations</dt><dd class="mono" data-tick="10457">10,457</dd></div>
+            <div><dt>Suite</dt><dd class="mono amber">ML-KEM-768</dd></div>
+          </dl>
+        </article>
+
+        <article class="cap cap-c">
+          <span class="corner corner-tr" aria-hidden="true"></span><span class="corner corner-bl" aria-hidden="true"></span>
+          <span class="cap-tag">CAP.03 // MESH</span>
+          <h3>Zero-trust mesh</h3>
+          <p>Every service proves identity and device posture on every call. No implicit trust between hops.</p>
+          <dl class="cap-metrics">
+            <div><dt>Sessions verified</dt><dd class="mono" data-tick="2310044">2,310,044</dd></div>
+            <div><dt class="threat">Blocked</dt><dd class="mono threat" data-tick="14737">14,737</dd></div>
+          </dl>
+        </article>
+
+        <article class="cap cap-d cap-live">
+          <span class="corner corner-tr" aria-hidden="true"></span><span class="corner corner-bl" aria-hidden="true"></span>
+          <span class="cap-tag">CAP.04 // DLP <span class="cap-live-tag">Live below</span></span>
+          <h3>Egress data sanitization</h3>
+          <p>Emails, phones, IPs, PAN, Aadhaar and card numbers are caught and masked or pseudonymized before data leaves. Card hits must pass Luhn and Aadhaar hits must pass Verhoeff, so random numbers stay untouched.</p>
+          <dl class="cap-metrics">
+            <div><dt>Entity types</dt><dd class="mono">6</dd></div>
+            <div><dt>Data sent out</dt><dd class="mono ok">0 bytes</dd></div>
+            <div><dt>Engine</dt><dd class="mono">in-tab</dd></div>
+          </dl>
+          <a class="cap-link" href="#sanitizer">Open the sanitizer <span aria-hidden="true">→</span></a>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ USE CASES ============ -->
+    <section class="section wrap reveal" id="usecases" aria-labelledby="useTitle">
+      <header class="section-head">
+        <span class="section-index">§04 // Where it fits</span>
+        <h2 class="section-title" id="useTitle">Built for the text people actually paste.</h2>
+        <p class="section-sub">Hover a card. Each preview is the raw line next to the engine's output, generated live.</p>
+      </header>
+      <div class="uses">
+        <article class="use" data-sample="2026-11-27 14:32:09 auth_ok user=devops.alerts+prod@eu-west.svc.example.org src=192.168.10.42">
+          <span class="cap-tag">01 // OPS</span>
+          <h3>Server logs</h3>
+          <p>Share a stack trace in a public issue without leaking user emails or internal IPs.</p>
+          <div class="use-demo mono"><div class="use-line use-raw"></div><div class="use-line use-clean"></div></div>
+        </article>
+        <article class="use" data-sample="Aarav Kulkarni · aarav.kulkarni+jobs@mail.example.in · 09876543210 · PAN ABCPE1234F">
+          <span class="cap-tag">02 // HR</span>
+          <h3>Resumes &amp; KYC</h3>
+          <p>Forward a candidate to a panel with contact details and tax IDs held back.</p>
+          <div class="use-demo mono"><div class="use-line use-raw"></div><div class="use-line use-clean"></div></div>
+        </article>
+        <article class="use" data-sample="Customer called from +91-98765-43210, card 4111 1111 1111 1111 declined twice.">
+          <span class="cap-tag">03 // SUPPORT</span>
+          <h3>Support tickets</h3>
+          <p>Escalate to engineering or a vendor. Card numbers never leave the queue.</p>
+          <div class="use-demo mono"><div class="use-line use-raw"></div><div class="use-line use-clean"></div></div>
+        </article>
+        <article class="use" data-sample="Patient callback +91 98201 55432 · Aadhaar 2345 6789 0124 · portal IP 198.51.100.14">
+          <span class="cap-tag">04 // CLINICAL</span>
+          <h3>Clinical notes</h3>
+          <p>Hand a note to research or an LLM with the identifiers stripped first.</p>
+          <div class="use-demo mono"><div class="use-line use-raw"></div><div class="use-line use-clean"></div></div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ SANITIZER (live app) ============ -->
+    <section class="section wrap" id="sanitizer" aria-labelledby="sanTitle">
+      <header class="section-head section-head-split">
+        <div>
+          <span class="section-index">§05 // Sanitizer</span>
+          <h2 class="section-title" id="sanTitle">Redact sensitive data on your own device.</h2>
+          <p class="section-sub">Paste text or drop a .txt or .csv file. Detection, validation and redaction all run in this tab.</p>
+        </div>
+        <p class="boot-line mono" aria-live="polite"><span id="bootLine">&gt; initializing sanitizer...</span></p>
+      </header>
+
+      <div class="app-frame chamfer-lg">
+        <div class="app-meta mono">
+          <span>EXEC: LOCAL // NET: BLOCKED (CSP)</span>
+          <span>ENC: IN-MEMORY ONLY</span>
+          <span class="file-tag" id="fileMetaTag">NO FILE // PASTE MODE</span>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar" aria-label="Sanitization controls">
+          <div class="tool-group">
+            <button type="button" id="btnSample" class="btn btn-primary btn-sm">Load noisy sample</button>
+            <label class="btn btn-ghost btn-sm file-label" for="fileInput" tabindex="0" role="button">
+              Upload .txt / .csv
+              <input type="file" id="fileInput" accept=".txt,.csv,text/plain,text/csv" hidden>
+            </label>
+            <button type="button" id="btnWipe" class="btn btn-danger btn-sm" title="Clear all text, mappings and state from memory">Wipe</button>
+          </div>
+
+          <div class="tool-group">
+            <div class="segmented" role="radiogroup" aria-label="Redaction mode" id="modeControl">
+              <span class="segment-indicator" id="modeIndicator" aria-hidden="true"></span>
+              <button type="button" class="seg-btn is-active" role="radio" aria-checked="true" data-mode="full">Full mask</button>
+              <button type="button" class="seg-btn" role="radio" aria-checked="false" data-mode="partial">Partial mask</button>
+              <button type="button" class="seg-btn" role="radio" aria-checked="false" data-mode="pseudonym">Pseudonymize</button>
+            </div>
+            <label class="switch" id="typedLabelWrap" title="Use typed blocks like [REDACTED:EMAIL]">
+              <input type="checkbox" id="chkTypedLabels">
+              <span class="switch-track" aria-hidden="true"></span>
+              <span class="switch-text">Typed tags</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="detector-row">
+          <span class="hud-label">Detectors</span>
+          <div class="filter-pills" id="filterPills"></div>
+        </div>
+
+        <div class="scan-strip">
+          <div class="scan-bar" id="scanBarWrap" aria-hidden="true">
+            <div class="scan-bar-fill"></div>
+            <span class="scan-bar-label" id="scanBarLabel">SCANNING...</span>
+          </div>
+          <div class="alert-banner" id="alertBanner" role="alert" hidden>
+            <span id="alertText"></span>
+            <button type="button" id="btnDismissAlert" class="btn-dismiss" aria-label="Dismiss notice">&times;</button>
+          </div>
+        </div>
+
+        <div class="summary-row mono" id="dockSummary">
+          <span><strong id="summaryTotal">0</strong> entities redacted</span>
+          <span><strong id="summaryRejected">0</strong> look-alikes rejected by checksum</span>
+          <span>Exposure <strong id="summaryExposure">0%</strong></span>
+        </div>
+
+        <!-- Diff workspace -->
+        <div class="diff" id="dropZone">
+          <div class="drop-overlay" id="dropOverlay" aria-hidden="true">
+            <div class="drop-box chamfer">
+              <span class="drop-title">Drop .txt or .csv</span>
+              <span class="drop-sub">Read into browser memory. Never uploaded.</span>
+            </div>
+          </div>
+
+          <section class="pane" aria-label="Original input editor">
+            <div class="pane-head">
+              <span class="pane-title">Original <span class="pane-title-dim">(editable)</span></span>
+              <span class="pane-meta mono" id="originalMeta">0 lines // 0 chars</span>
+            </div>
+            <div class="editor-viewport" id="originalViewport">
+              <div class="line-gutter" aria-hidden="true"><pre class="line-numbers" id="originalLines">1</pre></div>
+              <div class="mirror-stage">
+                <div class="mirror-backdrop" aria-hidden="true"><pre class="mirror-content" id="originalBackdrop"></pre></div>
+                <textarea id="originalInput" class="code-textarea" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off"
+                  aria-label="Original text containing PII to sanitize"
+                  placeholder="Paste logs, support tickets, resumes or CSV rows here, or load the noisy sample."></textarea>
+              </div>
+            </div>
+          </section>
+
+          <section class="pane" aria-label="Sanitized output">
+            <div class="pane-head">
+              <span class="pane-title">Sanitized</span>
+              <span class="pane-meta mono" id="sanitizedMeta">0 scrubbed</span>
+              <span class="stamp-badge" id="sanitizedStamp" aria-live="polite">IDLE</span>
+              <div class="pane-actions">
+                <button type="button" id="btnCopy" class="btn btn-ghost btn-xs" disabled>Copy</button>
+                <button type="button" id="btnDownloadOutput" class="btn btn-primary btn-xs" disabled>Download</button>
+              </div>
+            </div>
+            <div class="editor-viewport" id="sanitizedViewport">
+              <div class="line-gutter" aria-hidden="true"><pre class="line-numbers" id="sanitizedLines">1</pre></div>
+              <div class="output-stage" id="sanitizedScroll" tabindex="0" aria-label="Sanitized output viewer">
+                <pre class="output-content" id="sanitizedOutput"></pre>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Audit dock -->
+        <section class="dock" aria-label="Audit">
+          <div class="dock-head">
+            <div class="dock-tabs" role="tablist" aria-label="Audit views">
+              <button type="button" class="dock-tab is-active" role="tab" aria-selected="true" aria-controls="panelStats" id="tabStats" data-tab="stats">Exposure</button>
+              <button type="button" class="dock-tab" role="tab" aria-selected="false" aria-controls="panelFindings" id="tabFindings" data-tab="findings">Findings <span class="mono">(<span id="tabFindingsCount">0</span>)</span></button>
+              <button type="button" class="dock-tab" role="tab" aria-selected="false" aria-controls="panelMapping" id="tabMapping" data-tab="mapping">Pseudonym map <span class="mono">(<span id="tabMappingCount">0</span>)</span></button>
+            </div>
+            <button type="button" id="btnDownloadReport" class="btn btn-ghost btn-xs" disabled>Audit report (JSON)</button>
+          </div>
+
+          <div class="dock-panel is-active" id="panelStats" role="tabpanel" aria-labelledby="tabStats">
+            <div class="stats-grid">
+              <div class="stat-card">
+                <h3 class="card-heading">Exposure telemetry</h3>
+                <div class="meter-row">
+                  <div class="meter-label"><span>Input risk</span><strong class="mono" id="inputRiskVal">0 / 100</strong></div>
+                  <div class="meter-bar"><div class="meter-fill meter-risk" id="inputRiskBar"></div></div>
+                </div>
+                <div class="meter-row">
+                  <div class="meter-label"><span>Post-scrub exposure</span><strong class="mono" id="outputExposureVal">0 / 100 // IDLE</strong></div>
+                  <div class="meter-bar"><div class="meter-fill meter-safe" id="outputExposureBar"></div></div>
+                </div>
+                <p class="meter-note" id="exposureNote">Every active finding is scrubbed before export. Ignored findings stay in the output and raise exposure.</p>
+              </div>
+              <div class="stat-card">
+                <h3 class="card-heading">Entity distribution</h3>
+                <div class="dist-list" id="distList"></div>
+              </div>
+              <div class="stat-card">
+                <h3 class="card-heading">Checksum rejections</h3>
+                <ul class="rejected-list" id="rejectedList"></ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="dock-panel" id="panelFindings" role="tabpanel" aria-labelledby="tabFindings" hidden>
+            <div class="table-wrap">
+              <table class="hud-table">
+                <thead><tr><th scope="col">Line</th><th scope="col">Type</th><th scope="col">Masked preview</th><th scope="col">Brand / info</th><th scope="col">Output token</th><th scope="col">Ignore</th></tr></thead>
+                <tbody id="findingsTbody"></tbody>
+              </table>
+              <div class="empty-state" id="findingsEmpty">No entities yet. Paste text or load the noisy sample.</div>
+            </div>
+          </div>
+
+          <div class="dock-panel" id="panelMapping" role="tabpanel" aria-labelledby="tabMapping" hidden>
+            <div class="mapping-toolbar">
+              <div class="mapping-controls">
+                <label class="switch">
+                  <input type="checkbox" id="chkRevealRaw">
+                  <span class="switch-track" aria-hidden="true"></span>
+                  <span class="switch-text">Reveal raw values</span>
+                </label>
+                <span class="mapping-mode-note" id="mappingModeNote"></span>
+              </div>
+              <div class="mapping-export-group">
+                <span class="security-warning" role="note">The mapping file reverses pseudonymization. Store it securely.</span>
+                <button type="button" id="btnDownloadMapping" class="btn btn-amber btn-xs" disabled>Download mapping (JSON)</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="hud-table">
+                <thead><tr><th scope="col">Placeholder</th><th scope="col">Type</th><th scope="col">Masked preview</th><th scope="col">Original value</th><th scope="col">Hits</th></tr></thead>
+                <tbody id="mappingTbody"></tbody>
+              </table>
+              <div class="empty-state" id="mappingEmpty">No pseudonym mappings yet.</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ============ ARCHITECTURE / DEFENSE MATRIX ============ -->
+    <section class="section wrap reveal" id="architecture" aria-labelledby="archTitle">
+      <header class="section-head">
+        <span class="section-index">§06 // Defense matrix</span>
+        <h2 class="section-title" id="archTitle">From raw text to safe output in one pass.</h2>
+        <p class="section-sub">Select a stage. Latency and counts are measured live against the sample payload, and the readout on the right is the engine's actual output for that stage.</p>
+      </header>
+
+      <div class="matrix">
+        <div class="matrix-stages" role="tablist" aria-label="Pipeline stages">
+          <button type="button" class="stage is-active" role="tab" aria-selected="true" aria-controls="stagePanel" data-stage="0">
+            <span class="stage-num mono">Stage 01</span><span class="stage-name">Detect</span>
+          </button>
+          <button type="button" class="stage" role="tab" aria-selected="false" aria-controls="stagePanel" data-stage="1" tabindex="-1">
+            <span class="stage-num mono">Stage 02</span><span class="stage-name">Isolate</span>
+          </button>
+          <button type="button" class="stage" role="tab" aria-selected="false" aria-controls="stagePanel" data-stage="2" tabindex="-1">
+            <span class="stage-num mono">Stage 03</span><span class="stage-name">Neutralize</span>
+          </button>
+        </div>
+
+        <div class="readout chamfer-lg" id="stagePanel" role="tabpanel">
+          <div class="readout-info">
+            <span class="cap-tag" id="stageTag">STAGE 01 // SENSE</span>
+            <h3 class="readout-title" id="stageTitle">Detect</h3>
+            <dl class="readout-stats">
+              <div><dt>Latency</dt><dd class="mono cyan" id="stageLatency">—</dd></div>
+              <div><dt id="stageStatLabel">Candidates</dt><dd class="mono amber" id="stageStat">—</dd></div>
+            </dl>
+            <ol class="readout-steps" id="stageSteps"></ol>
+          </div>
+          <div class="readout-visual" id="stageVisual">
+            <div class="rv-head mono"><span id="rvTitle">SCAN FEED</span><span id="rvMeta"></span></div>
+            <div class="rv-body" id="rvBody"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CTA ============ -->
+    <section class="wrap" id="contact" aria-labelledby="ctaTitle">
+      <div class="cta-banner chamfer-lg">
+        <div>
+          <span class="eyebrow eyebrow-amber">Clearance: open</span>
+          <h2 class="cta-title" id="ctaTitle">Run a security audit on your own data.</h2>
+          <p class="section-sub">Load the noisy sample, export the audit report and see exactly what would have leaked. It takes about ten seconds and nothing leaves this page.</p>
+        </div>
+        <div class="cta-actions">
+          <a class="btn btn-primary chamfer" href="#sanitizer" id="ctaAudit">Start local audit</a>
+          <a class="btn btn-ghost chamfer" href="#architecture">How it works</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="footer">
+    <div class="wrap footer-grid">
+      <div class="footer-brand">
+        <span class="brand-word">AEGIS <span class="brand-sep">//</span> PROTOCOL</span>
+        <p>Client-side PII detection and redaction. No server, no storage, no telemetry.</p>
+      </div>
+      <div>
+        <h4>Platform</h4>
+        <ul><li><a href="#capabilities">Capabilities</a></li><li><a href="#sanitizer">Sanitizer</a></li><li><a href="#architecture">Defense matrix</a></li></ul>
+      </div>
+      <div>
+        <h4>Engine</h4>
+        <ul><li><a href="tests/tests.html">Test suite</a></li><li><a href="README.md">README</a></li></ul>
+      </div>
+      <div>
+        <h4>System</h4>
+        <ul class="sys-list mono">
+          <li><span class="status-dot" aria-hidden="true"></span>Session uptime <span id="uptime">00:00:00</span></li>
+          <li>Network calls <span id="footRequests">0</span></li>
+          <li>Build 2.0.0 · CSP strict</li>
+        </ul>
+      </div>
+    </div>
+    <div class="wrap footer-base mono">
+      <span>© 2026 AEGIS // PROTOCOL. Hackathon build.</span>
+      <a href="#top">Back to top ↑</a>
+    </div>
+  </footer>
+
+  <div class="sr-only" id="liveAnnouncer" aria-live="polite" aria-atomic="true"></div>
+
+  <script defer src="js/validators.js?v=2.1"></script>
+  <script defer src="js/detectors.js?v=2.1"></script>
+  <script defer src="js/redactors.js?v=2.1"></script>
+  <script defer src="js/sample.js?v=2.1"></script>
+  <script defer src="js/ui.js?v=2.1"></script>
+  <script defer src="js/app.js?v=2.1"></script>
+  <script defer src="js/scene3d.js?v=2.1"></script>
+  <script defer src="js/landing.js?v=2.1"></script>
+</body>
+</html>
