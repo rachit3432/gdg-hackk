@@ -36,20 +36,8 @@
       enabledTypes: createInitialEnabled(),
       ignoredKeys: new Set(),
       findings: [],
-      counts: {
-        EMAIL: 0,
-        PHONE: 0,
-        IP: 0,
-        PAN: 0,
-        AADHAAR: 0,
-        CREDIT_CARD: 0
-      },
-      rejected: {
-        CREDIT_CARD: 0,
-        AADHAAR: 0,
-        PAN: 0,
-        IP: 0
-      },
+      counts: D.emptyCounts(),
+      rejected: D.emptyRejected(),
       outputText: '',
       replacements: [],
       mapping: [],
@@ -59,11 +47,13 @@
       origById: new Map(),
       sanById: new Map(),
       rowById: new Map(),
-      origMarks: [],
       scanToken: 0,
       debounceTimer: null,
       scrollLock: false,
-      hoverRaf: null
+      hoverRaf: null,
+      activeTab: 'stats',
+      lineStarts: null,
+      lastAnnounce: ''
     };
 
     UI.runBootSequence(dom);
@@ -142,22 +132,14 @@
       );
       state.origById = refs.origById;
       state.sanById = refs.sanById;
-      state.origMarks = refs.origMarks;
       state.activeFid = null;
 
       UI.renderFilterPills(dom, state.enabledTypes, stats.activeCounts, handleToggleEntityType);
       UI.renderStats(dom, stats, hasInput, state.prevExposure);
       state.prevExposure = stats.outputExposure;
 
-      state.rowById = UI.renderFindingsTable(
-        dom,
-        state.replacements,
-        handleToggleIgnore,
-        setActiveHighlight,
-        handleSelectFindingRow
-      );
-
-      UI.renderMappingTable(dom, state.mapping, state.revealRaw, state.mode);
+      state.lineStarts = null; // hover index is rebuilt lazily
+      renderTables();
 
       const exportDisabled = !hasInput;
       dom.btnCopy.disabled = exportDisabled;
@@ -168,15 +150,56 @@
       UI.syncSanitizedLinesTransform(dom);
 
       if (hasInput) {
-        UI.announce(
-          dom,
-          'Detected ' +
-            stats.activeTotal +
-            ' PII entities. Exposure score: ' +
-            stats.outputExposure +
-            ' percent.'
-        );
+        const msg =
+          'Detected ' + stats.activeTotal + ' PII entities. Exposure score: ' + stats.outputExposure + ' percent.';
+        if (msg !== state.lastAnnounce) {
+          state.lastAnnounce = msg;
+          UI.announce(dom, msg);
+        }
       }
+    }
+
+    /**
+     * Update tab counters every time, but only build the table body of the tab
+     * that is visible. Hidden tables are rebuilt when their tab is opened.
+     */
+    function renderTables() {
+      dom.tabFindingsCount.textContent = String(state.replacements.length);
+      dom.tabMappingCount.textContent = String(state.mapping.length);
+      dom.btnDownloadMapping.disabled = state.mapping.length === 0;
+      if (state.activeTab === 'findings') {
+        state.rowById = UI.renderFindingsTable(
+          dom,
+          state.replacements,
+          handleToggleIgnore,
+          setActiveHighlight,
+          handleSelectFindingRow
+        );
+      } else {
+        state.rowById = new Map();
+      }
+      if (state.activeTab === 'mapping') {
+        UI.renderMappingTable(dom, state.mapping, state.revealRaw, state.mode);
+      }
+    }
+
+    /** Binary search: the finding whose [start, end] span contains pos, or null. */
+    function findingAt(pos) {
+      const list = state.findings;
+      let lo = 0;
+      let hi = list.length - 1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >>> 1;
+        const f = list[mid];
+        if (pos < f.start) {
+          hi = mid - 1;
+        } else if (pos > f.end) {
+          lo = mid + 1;
+        } else {
+          return f;
+        }
+      }
+      return null;
     }
 
     /**
@@ -186,22 +209,15 @@
       const currentToken = ++state.scanToken;
       if (!state.text) {
         state.findings = [];
-        state.counts = {
-          EMAIL: 0,
-          PHONE: 0,
-          IP: 0,
-          PAN: 0,
-          AADHAAR: 0,
-          CREDIT_CARD: 0
-        };
-        state.rejected = { CREDIT_CARD: 0, AADHAAR: 0, PAN: 0, IP: 0 };
+        state.counts = D.emptyCounts();
+        state.rejected = D.emptyRejected();
         state.ignoredKeys.clear();
         UI.setScanning(dom, false);
         applyRedactionAndRender();
         return;
       }
 
-      if (state.text.length <= 160000) {
+      if (state.text.length <= D.SYNC_SCAN_LIMIT) {
         const result = D.scan(state.text, state.enabledTypes);
         state.findings = result.findings;
         state.counts = result.counts;
@@ -416,8 +432,8 @@
       state.sourceFilename = null;
       state.ignoredKeys.clear();
       state.findings = [];
-      state.counts = { EMAIL: 0, PHONE: 0, IP: 0, PAN: 0, AADHAAR: 0, CREDIT_CARD: 0 };
-      state.rejected = { CREDIT_CARD: 0, AADHAAR: 0, PAN: 0, IP: 0 };
+      state.counts = D.emptyCounts();
+      state.rejected = D.emptyRejected();
       state.outputText = '';
       state.replacements = [];
       state.mapping = [];
@@ -538,41 +554,64 @@
 
     // Cross-highlighting: click & hover inside Original textarea
     dom.originalInput.addEventListener('click', function () {
-      const pos = dom.originalInput.selectionStart;
-      for (let i = 0; i < state.findings.length; i++) {
-        const f = state.findings[i];
-        if (pos >= f.start && pos <= f.end) {
-          setActiveHighlight(f.id);
-          return;
-        }
-        if (f.start > pos) {
-          break;
-        }
-      }
-      setActiveHighlight(null);
+      const f = findingAt(dom.originalInput.selectionStart);
+      setActiveHighlight(f ? f.id : null);
     });
 
+    // Hover hit-test by arithmetic on the monospace grid plus a binary search:
+    // O(log n) per frame and no layout reads per highlight.
+    const metrics = { charW: 0, lineH: 0, padL: 0, padT: 0 };
+    function measureEditor() {
+      const cs = global.getComputedStyle(dom.originalInput);
+      const probe = document.createElement('span');
+      probe.textContent = '0000000000';
+      dom.originalBackdrop.appendChild(probe);
+      metrics.charW = probe.getBoundingClientRect().width / 10;
+      probe.remove();
+      metrics.lineH = parseFloat(cs.lineHeight) || 21;
+      metrics.padL = parseFloat(cs.paddingLeft) || 0;
+      metrics.padT = parseFloat(cs.paddingTop) || 0;
+    }
+    global.addEventListener('resize', function () {
+      metrics.charW = 0;
+    });
+
+    function offsetAtPoint(clientX, clientY) {
+      if (!metrics.charW) {
+        measureEditor();
+      }
+      if (!state.lineStarts) {
+        const starts = [0];
+        for (let i = 0; i < state.text.length; i++) {
+          if (state.text.charCodeAt(i) === 10) {
+            starts.push(i + 1);
+          }
+        }
+        state.lineStarts = starts;
+      }
+      const ta = dom.originalInput;
+      const box = ta.getBoundingClientRect();
+      const line = Math.floor((clientY - box.top - metrics.padT + ta.scrollTop) / metrics.lineH);
+      const col = Math.floor((clientX - box.left - metrics.padL + ta.scrollLeft) / metrics.charW);
+      if (line < 0 || col < 0 || line >= state.lineStarts.length) {
+        return -1;
+      }
+      const lineEnd = line + 1 < state.lineStarts.length ? state.lineStarts[line + 1] - 1 : state.text.length;
+      const pos = state.lineStarts[line] + col;
+      return pos < lineEnd ? pos : -1;
+    }
+
     dom.originalInput.addEventListener('mousemove', function (ev) {
-      if (state.origMarks.length === 0 || state.hoverRaf !== null) {
+      if (state.findings.length === 0 || state.hoverRaf !== null) {
         return;
       }
       const cx = ev.clientX;
       const cy = ev.clientY;
       state.hoverRaf = requestAnimationFrame(function () {
         state.hoverRaf = null;
-        let hitFid = null;
-        for (let i = 0; i < state.origMarks.length; i++) {
-          const mark = state.origMarks[i];
-          const box = mark.getBoundingClientRect();
-          if (cy < box.top || cy > box.bottom) {
-            continue;
-          }
-          if (cx >= box.left && cx <= box.right) {
-            hitFid = mark.getAttribute('data-fid');
-            break;
-          }
-        }
-        setActiveHighlight(hitFid);
+        const pos = offsetAtPoint(cx, cy);
+        const f = pos === -1 ? null : findingAt(pos);
+        setActiveHighlight(f && pos < f.end ? f.id : null);
       });
     });
 
@@ -616,17 +655,17 @@
           setMode(btn.getAttribute('data-mode'));
         });
         btn.addEventListener('keydown', function (ev) {
-          if (ev.key === 'ArrowRight' || ev.key === 'ArrowDown') {
+          const n = dom.modeButtons.length;
+          const target =
+            ev.key === 'ArrowRight' || ev.key === 'ArrowDown' ? (index + 1) % n
+            : ev.key === 'ArrowLeft' || ev.key === 'ArrowUp' ? (index - 1 + n) % n
+            : ev.key === 'Home' ? 0
+            : ev.key === 'End' ? n - 1
+            : -1;
+          if (target !== -1) {
             ev.preventDefault();
-            const nextBtn = dom.modeButtons[(index + 1) % dom.modeButtons.length];
-            nextBtn.focus();
-            setMode(nextBtn.getAttribute('data-mode'));
-          } else if (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') {
-            ev.preventDefault();
-            const prevBtn =
-              dom.modeButtons[(index - 1 + dom.modeButtons.length) % dom.modeButtons.length];
-            prevBtn.focus();
-            setMode(prevBtn.getAttribute('data-mode'));
+            dom.modeButtons[target].focus();
+            setMode(dom.modeButtons[target].getAttribute('data-mode'));
           }
         });
       })(dom.modeButtons[i], i);
@@ -649,11 +688,13 @@
         findings: 'panelFindings',
         mapping: 'panelMapping'
       };
+      state.activeTab = tabName;
       for (let i = 0; i < dom.dockTabs.length; i++) {
         const t = dom.dockTabs[i];
         const active = t.getAttribute('data-tab') === tabName;
         t.classList.toggle('is-active', active);
         t.setAttribute('aria-selected', active ? 'true' : 'false');
+        t.tabIndex = active ? 0 : -1;
       }
       for (let i = 0; i < dom.dockPanels.length; i++) {
         const p = dom.dockPanels[i];
@@ -661,6 +702,7 @@
         p.classList.toggle('is-active', show);
         p.hidden = !show;
       }
+      renderTables();
     }
 
     for (let i = 0; i < dom.dockTabs.length; i++) {
@@ -669,16 +711,17 @@
           activateTab(tab.getAttribute('data-tab'));
         });
         tab.addEventListener('keydown', function (ev) {
-          if (ev.key === 'ArrowRight') {
+          const n = dom.dockTabs.length;
+          const target =
+            ev.key === 'ArrowRight' ? (index + 1) % n
+            : ev.key === 'ArrowLeft' ? (index - 1 + n) % n
+            : ev.key === 'Home' ? 0
+            : ev.key === 'End' ? n - 1
+            : -1;
+          if (target !== -1) {
             ev.preventDefault();
-            const next = dom.dockTabs[(index + 1) % dom.dockTabs.length];
-            next.focus();
-            activateTab(next.getAttribute('data-tab'));
-          } else if (ev.key === 'ArrowLeft') {
-            ev.preventDefault();
-            const prev = dom.dockTabs[(index - 1 + dom.dockTabs.length) % dom.dockTabs.length];
-            prev.focus();
-            activateTab(prev.getAttribute('data-tab'));
+            dom.dockTabs[target].focus();
+            activateTab(dom.dockTabs[target].getAttribute('data-tab'));
           }
         });
       })(dom.dockTabs[i], i);
@@ -778,6 +821,7 @@
     });
 
     // Initial render
+    activateTab('stats');
     applyRedactionAndRender();
   }
 
